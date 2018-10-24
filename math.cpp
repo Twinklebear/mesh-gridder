@@ -66,10 +66,11 @@ bool line_box_intersection(const vec3f &pa, const vec3f &pb, const box3f &box) {
 	if (tzmax < tmax){
 		tmax = tzmax;
 	}
-	return tmin <= 0.0 && tmax >= 1.0;
+	return tmin >= -0.001 && tmax <= 1.001;
 }
 
 bool triangle_box_intersection(const vec3f &pa, const vec3f &pb, const vec3f &pc, const box3f &box) {
+	// TODO: This is not enough, we actually need to do a collision test for this using SAT
 	return line_box_intersection(pa, pb, box)
 		|| line_box_intersection(pb, pc, box)
 		|| line_box_intersection(pc, pa, box);
