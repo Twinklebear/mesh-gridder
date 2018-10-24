@@ -2,20 +2,20 @@
 #include <array>
 #include "math.h"
 
-vec3f::vec3f(float x) : x(x), y(x), z(x) {}
-vec3f::vec3f(float x, float y, float z) : x(x), y(y), z(z) {}
-
-vec3f operator+(const vec3f &va, const vec3f &vb) {
-	return vec3f(va.x + vb.x, va.y + vb.y, va.z + vb.z);
-}
-vec3f operator-(const vec3f &va, const vec3f &vb) {
-	return vec3f(va.x - vb.x, va.y - vb.y, va.z - vb.z);
-}
-vec3f operator/(const float x, const vec3f &v) {
-	return vec3f(x / v.x, x / v.y, x / v.z);
-}
-
+box3f::box3f()
+	: lower(std::numeric_limits<float>::infinity()),
+	upper(-std::numeric_limits<float>::infinity())
+{}
 box3f::box3f(const vec3f &lower, const vec3f &upper) : lower(lower), upper(upper) {}
+void box3f::extend(const vec3f &v) {
+	lower.x = std::min(lower.x, v.x);
+	lower.y = std::min(lower.y, v.y);
+	lower.z = std::min(lower.z, v.z);
+
+	upper.x = std::max(upper.x, v.x);
+	upper.y = std::max(upper.y, v.y);
+	upper.z = std::max(upper.z, v.z);
+}
 const vec3f& box3f::operator[](const size_t i) const {
 	switch (i) {
 		case 0: return lower;
@@ -23,6 +23,10 @@ const vec3f& box3f::operator[](const size_t i) const {
 		default: throw std::runtime_error("invalid box index");
 	}
 	return vec3f();
+}
+std::ostream& operator<<(std::ostream &os, const box3f &b) {
+	os << "[" << b.lower << ", " << b.upper << "]";
+	return os;
 }
 
 bool line_box_intersection(const vec3f &pa, const vec3f &pb, const box3f &box) {
@@ -62,7 +66,7 @@ bool line_box_intersection(const vec3f &pa, const vec3f &pb, const box3f &box) {
 	if (tzmax < tmax){
 		tmax = tzmax;
 	}
-	return tmin < 0.0 && tmax > 1.0;
+	return tmin <= 0.0 && tmax >= 1.0;
 }
 
 bool triangle_box_intersection(const vec3f &pa, const vec3f &pb, const vec3f &pc, const box3f &box) {
