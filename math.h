@@ -1,5 +1,12 @@
 #pragma once
 
+#include <array>
+
+template<typename T>
+T lerp(const float t, const T &a, const T &b) {
+	return (1.0 - t) * a + t * b;
+}
+
 inline float rescale_value(const float x, const float oldmin, const float oldmax,
 		const float newmin, const float newmax)
 {
@@ -51,6 +58,8 @@ struct box3f {
 	box3f();
 	box3f(const vec3f &lower, const vec3f &upper);
 	void extend(const vec3f &v);
+	vec3f center() const;
+	std::array<vec3f, 3> half_vectors() const;
 	const vec3f& operator[](const size_t i) const;
 };
 std::ostream& operator<<(std::ostream &os, const box3f &b);
@@ -60,5 +69,4 @@ bool line_box_intersection(const vec3f &pa, const vec3f &pb, const box3f &box);
 
 // Test if the triangle defined by pa, pb, pc intersects the box
 bool triangle_box_intersection(const vec3f &pa, const vec3f &pb, const vec3f &pc, const box3f &box);
-
 

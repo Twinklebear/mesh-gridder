@@ -16,6 +16,8 @@ void box3f::extend(const vec3f &v) {
 	upper.y = std::max(upper.y, v.y);
 	upper.z = std::max(upper.z, v.z);
 }
+vec3f box3f::center() const;
+std::array<vec3f, 3> box3f::half_vectors() const;
 const vec3f& box3f::operator[](const size_t i) const {
 	switch (i) {
 		case 0: return lower;
