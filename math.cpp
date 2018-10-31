@@ -1,3 +1,5 @@
+#include <limits>
+#include <iostream>
 #include <stdexcept>
 #include <array>
 #include "math.h"
@@ -16,8 +18,13 @@ void box3f::extend(const vec3f &v) {
 	upper.y = std::max(upper.y, v.y);
 	upper.z = std::max(upper.z, v.z);
 }
-vec3f box3f::center() const;
-std::array<vec3f, 3> box3f::half_vectors() const;
+vec3f box3f::center() const {
+	return lerp(0.5, lower, upper);
+}
+vec3f box3f::half_lengths() const {
+	const vec3f c = center();
+	return upper - c;
+}
 const vec3f& box3f::operator[](const size_t i) const {
 	switch (i) {
 		case 0: return lower;
@@ -68,13 +75,59 @@ bool line_box_intersection(const vec3f &pa, const vec3f &pb, const box3f &box) {
 	if (tzmax < tmax){
 		tmax = tzmax;
 	}
-	return tmin >= -0.001 && tmax <= 1.001;
+	return tmin >= 0.0 && tmax <= 1.0;
 }
 
 bool triangle_box_intersection(const vec3f &pa, const vec3f &pb, const vec3f &pc, const box3f &box) {
-	// TODO: This is not enough, we actually need to do a collision test for this using SAT
-	return line_box_intersection(pa, pb, box)
-		|| line_box_intersection(pb, pc, box)
-		|| line_box_intersection(pc, pa, box);
+	// Translate so that the box center is at the origin
+	const vec3f bcenter = box.center();
+	const std::array<vec3f, 3> vert{pa - bcenter, pb - bcenter, pc - bcenter};
+	const std::array<vec3f, 3> edge{vert[1] - vert[0], vert[2] - vert[1], vert[0] - vert[2]};
+	const std::array<vec3f, 3> axes{vec3f(1, 0, 0), vec3f(0, 1, 0), vec3f(0, 0, 1)};
+	const vec3f half_lens = box.half_lengths();
+
+	// Bullet 1: Check if we can separate the triangle AABB and the box
+	for (int i = 0; i < 3; ++i) {
+		const float min = std::min(vert[0][i], std::min(vert[1][i], vert[2][i]));
+		const float max = std::max(vert[0][i], std::max(vert[1][i], vert[2][i]));
+		if (min > half_lens[i] || max < -half_lens[i]) {
+			return false;
+		}
+	}
+
+	// Bullet 2: test for overlap of the triangle plane and AABB
+	const vec3f tri_normal = cross(edge[0], edge[1]);
+	{
+		vec3f vmin, vmax;
+		for (int i = 0; i < 3; ++i) {
+			if (tri_normal[i] > 0.0f) {
+				vmin[i] = -half_lens[i] - vert[0][i];
+				vmax[i] = half_lens[i] - vert[0][i];
+			} else {
+				vmin[i] = half_lens[i] - vert[0][i];
+				vmax[i] = -half_lens[i] - vert[0][i];
+			}
+		}
+		if (dot(tri_normal, vmin) > 0.0f) {
+			return false;
+		}
+	}
+
+	// Bullet 3
+	// This is not the most optimal way to write the 9 tests for bullet 3, but it's easier to read
+	for (int i = 0; i < 3; ++i) {
+		for (int j = 0; j < 3; ++j) {
+			const vec3f a = cross(axes[i], edge[j]);
+			const std::array<float, 3> p = {dot(a, vert[0]), dot(a, vert[1]), dot(a, vert[2])};
+			const float minp = std::min(p[0], std::min(p[1], p[2]));
+			const float maxp = std::max(p[0], std::max(p[1], p[2]));
+			const float r = half_lens.x * std::abs(a.x) + half_lens.y * std::abs(a.y)
+				+ half_lens.z * std::abs(a.z);
+			if (minp > r || maxp < -r) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
