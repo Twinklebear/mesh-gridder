@@ -1,7 +1,8 @@
 #include <iostream>
+#include <set>
+#include <unordered_map>
 #include <string>
 #include <fstream>
-#include <unordered_map>
 #include <array>
 #include "tbb/tbb.h"
 
@@ -48,9 +49,9 @@ int main(int argc, char **argv) {
 		// Loop over vertices in the face.
 		for (size_t v = 0; v < 3; ++v) {
 			tinyobj::index_t idx = shape.mesh.indices[f * 3 + v];
-			vec3f p(attrib.vertices[3*idx.vertex_index],
-					attrib.vertices[3*idx.vertex_index+1],
-					attrib.vertices[3*idx.vertex_index+2]);
+			vec3f p(attrib.vertices[3 * idx.vertex_index],
+					attrib.vertices[3 * idx.vertex_index + 1],
+					attrib.vertices[3 * idx.vertex_index + 2]);
 			model_bounds.extend(p);
 		}
 	}
@@ -63,16 +64,14 @@ int main(int argc, char **argv) {
 		<< "Grid to " << grid << " dim grid\n"
 		<< "Brick size = " << brick_size << "\n";
 
-	//tbb::parallel_for(size_t(0), ncells, size_t(1),
-	for (size_t i = 0; i < ncells; ++i) {
-		auto fn = [&](const size_t i) {
+	tbb::parallel_for(size_t(0), ncells, size_t(1),
+		[&](const size_t i) {
 			const vec3sz idx(i % grid.x, (i / grid.x) % grid.y, i / (grid.x * grid.y));
 			const vec3f blower(
 					rescale_value(idx.x, 0, grid.x, model_bounds.lower.x, model_bounds.upper.x),
 					rescale_value(idx.y, 0, grid.y, model_bounds.lower.y, model_bounds.upper.y),
 					rescale_value(idx.z, 0, grid.z, model_bounds.lower.z, model_bounds.upper.z));
 			const box3f brick_bounds(blower, blower + brick_size);
-			std::cout << "Brick idx: " << idx << "\nBounds: " << brick_bounds << "\n";
 
 			std::vector<size_t> contained_tris;
 			// Loop through the mesh and see which triangles are contained in this grid cell
@@ -80,18 +79,13 @@ int main(int argc, char **argv) {
 				std::array<vec3f, 3> tri;
 				for (size_t v = 0; v < 3; ++v) {
 					tinyobj::index_t idx = shape.mesh.indices[f * 3 + v];
-					vec3f p(attrib.vertices[3*idx.vertex_index],
-							attrib.vertices[3*idx.vertex_index+1],
-							attrib.vertices[3*idx.vertex_index+2]);
+					vec3f p(attrib.vertices[3 * idx.vertex_index],
+							attrib.vertices[3 * idx.vertex_index + 1],
+							attrib.vertices[3 * idx.vertex_index + 2]);
 					tri[v] = p;
 				}
-				std::cout << "triangle "
-					<< tri[0] << ", " << tri[1] << ", " << tri[2];
 				if (triangle_box_intersection(tri[0], tri[1], tri[2], brick_bounds)) {
-					std::cout << ", is in\n";
 					contained_tris.push_back(f);
-				} else {
-					std::cout << ", not in\n";
 				}
 
 			}
@@ -100,32 +94,35 @@ int main(int argc, char **argv) {
 			// out the file
 			const std::string fname = argv[5] + std::to_string(i) + ".obj";
 			write_obj_brick(attrib, shape, contained_tris, fname);
-		};//);
-		fn(i);
-	}
+		});
 
 	return 0;
 }
 void write_obj_brick(const tinyobj::attrib_t &attrib, const tinyobj::shape_t &shape,
 		const std::vector<size_t> &tris, const std::string &fname)
 {
+	std::ofstream fout(fname.c_str());
 	size_t next_vert_id = 1;
 	std::unordered_map<size_t, size_t> vertex_remapping;
+	std::map<vec3f, size_t> remapped_verts;
+
 	for (const auto &t : tris) {
 		for (size_t v = 0; v < 3; ++v) {
 			tinyobj::index_t idx = shape.mesh.indices[t * 3 + v];
-			if (vertex_remapping.find(idx.vertex_index) == vertex_remapping.end()) {
-				vertex_remapping[idx.vertex_index] = next_vert_id;
+			const vec3f vert(attrib.vertices[3 * idx.vertex_index],
+					attrib.vertices[3 * idx.vertex_index + 1],
+					attrib.vertices[3 * idx.vertex_index + 2]);
+
+			if (remapped_verts.find(vert) == remapped_verts.end()) {
+				remapped_verts[vert] = next_vert_id;
+
+				fout << "# " << idx.vertex_index << " -> " << next_vert_id << "\n";
+				fout << "v " << vert.x << " " << vert.y << " " << vert.z << "\n";
+
 				++next_vert_id;
 			}
+			vertex_remapping[idx.vertex_index] = remapped_verts[vert];
 		}
-	}
-	std::ofstream fout(fname.c_str());
-	for (const auto &v : vertex_remapping) {
-		fout << "v " << attrib.vertices[3*v.first]
-			<< " " << attrib.vertices[3*v.first + 1]
-			<< " " << attrib.vertices[3*v.first + 2]
-			<< "\n";
 	}
 	for (const auto &t : tris) {
 		std::array<size_t, 3> tids;
