@@ -116,7 +116,6 @@ void write_obj_brick(const tinyobj::attrib_t &attrib, const tinyobj::shape_t &sh
 			if (remapped_verts.find(vert) == remapped_verts.end()) {
 				remapped_verts[vert] = next_vert_id;
 
-				fout << "# " << idx.vertex_index << " -> " << next_vert_id << "\n";
 				fout << "v " << vert.x << " " << vert.y << " " << vert.z << "\n";
 
 				++next_vert_id;
