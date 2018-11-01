@@ -81,7 +81,9 @@ int main(int argc, char **argv) {
 
 	for (size_t i = 0; i < isosurface->GetNumberOfCells(); ++i) {
 		vtkTriangle *tri = dynamic_cast<vtkTriangle*>(isosurface->GetCell(i));
-
+		if (tri->ComputeArea() == 0.0) {
+			continue;
+		}
 		for (size_t v = 0; v < 3; ++v) {
 			const vec3f vert(isosurface->GetPoint(tri->GetPointId(v))[0],
 					isosurface->GetPoint(tri->GetPointId(v))[1],
@@ -100,6 +102,9 @@ int main(int argc, char **argv) {
 	for (size_t i = 0; i < isosurface->GetNumberOfCells(); ++i) {
 		std::array<size_t, 3> tids;
 		vtkTriangle *tri = dynamic_cast<vtkTriangle*>(isosurface->GetCell(i));
+		if (tri->ComputeArea() == 0.0) {
+			continue;
+		}
 		for (size_t v = 0; v < 3; ++v) {
 			tids[v] = vertex_remapping[tri->GetPointId(v)];
 		}
