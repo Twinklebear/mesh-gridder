@@ -48,6 +48,9 @@ int main(int argc, char **argv) {
 	} else if (data_type == "float32") {
 		dtype_size = 4;
 		vtk_data_type = VTK_FLOAT;
+	} else if (data_type == "float64") {
+		dtype_size = 8;
+		vtk_data_type = VTK_DOUBLE;
 	} else {
 		throw std::runtime_error("Unsupported or unrecognized data type: " + data_type);
 	}
