@@ -14,7 +14,8 @@
 #include "math.h"
 
 int main(int argc, char **argv) {
-	const int nisosurfaces = std::atoi(argv[2]);
+	const int nisosurfaces = std::atoi(argv[3]);
+	const std::string outputfile = argv[2];
 	const std::string file = argv[1];
 	const std::regex match_filename("(\\w+)_(\\d+)x(\\d+)x(\\d+)_(.+)\\.raw");
 	auto matches = std::sregex_iterator(file.begin(), file.end(), match_filename);
@@ -48,7 +49,7 @@ int main(int argc, char **argv) {
 	} else if (data_type == "float32") {
 		dtype_size = 4;
 		vtk_data_type = VTK_FLOAT;
-	} else if (data_type == "float64") {
+	} else if (data_type == "float64" || data_type == "double") {
 		dtype_size = 8;
 		vtk_data_type = VTK_DOUBLE;
 	} else {
@@ -70,48 +71,52 @@ int main(int argc, char **argv) {
 	fedges->SetInputData(img_data);
 	fedges->SetNumberOfContours(nisosurfaces);
 	for (int i = 0; i < nisosurfaces; ++i) {
-		fedges->SetValue(i, std::atof(argv[i + 3]));
+		std::cout << "Isoval: " << argv[i + 4] << "\n";
+		fedges->SetValue(i, std::atof(argv[i + 4]));
 	}
 	fedges->SetComputeNormals(false);
 	fedges->Update();
 	vtkPolyData *isosurface = fedges->GetOutput();
 	isosurface->PrintSelf(std::cout, vtkIndent());
 
-	std::ofstream fout("isosurface.obj");
-	size_t next_vert_id = 1;
-	std::unordered_map<size_t, size_t> vertex_remapping;
-	std::map<vec3f, size_t> remapped_verts;
+	if (outputfile != "nooutput") {
+		std::cout << "Saving mesh to " << outputfile << "\n";
+		std::ofstream fout(outputfile.c_str());
+		size_t next_vert_id = 1;
+		std::unordered_map<size_t, size_t> vertex_remapping;
+		std::map<vec3f, size_t> remapped_verts;
 
-	for (size_t i = 0; i < isosurface->GetNumberOfCells(); ++i) {
-		vtkTriangle *tri = dynamic_cast<vtkTriangle*>(isosurface->GetCell(i));
-		if (tri->ComputeArea() == 0.0) {
-			continue;
-		}
-		for (size_t v = 0; v < 3; ++v) {
-			const vec3f vert(isosurface->GetPoint(tri->GetPointId(v))[0],
-					isosurface->GetPoint(tri->GetPointId(v))[1],
-					isosurface->GetPoint(tri->GetPointId(v))[2]);
-
-			if (remapped_verts.find(vert) == remapped_verts.end()) {
-				remapped_verts[vert] = next_vert_id;
-
-				fout << "v " << vert.x << " " << vert.y << " " << vert.z << "\n";
-
-				++next_vert_id;
+		for (size_t i = 0; i < isosurface->GetNumberOfCells(); ++i) {
+			vtkTriangle *tri = dynamic_cast<vtkTriangle*>(isosurface->GetCell(i));
+			if (tri->ComputeArea() == 0.0) {
+				continue;
 			}
-			vertex_remapping[tri->GetPointId(v)] = remapped_verts[vert];
+			for (size_t v = 0; v < 3; ++v) {
+				const vec3f vert(isosurface->GetPoint(tri->GetPointId(v))[0],
+						isosurface->GetPoint(tri->GetPointId(v))[1],
+						isosurface->GetPoint(tri->GetPointId(v))[2]);
+
+				if (remapped_verts.find(vert) == remapped_verts.end()) {
+					remapped_verts[vert] = next_vert_id;
+
+					fout << "v " << vert.x << " " << vert.y << " " << vert.z << "\n";
+
+					++next_vert_id;
+				}
+				vertex_remapping[tri->GetPointId(v)] = remapped_verts[vert];
+			}
 		}
-	}
-	for (size_t i = 0; i < isosurface->GetNumberOfCells(); ++i) {
-		std::array<size_t, 3> tids;
-		vtkTriangle *tri = dynamic_cast<vtkTriangle*>(isosurface->GetCell(i));
-		if (tri->ComputeArea() == 0.0) {
-			continue;
+		for (size_t i = 0; i < isosurface->GetNumberOfCells(); ++i) {
+			std::array<size_t, 3> tids;
+			vtkTriangle *tri = dynamic_cast<vtkTriangle*>(isosurface->GetCell(i));
+			if (tri->ComputeArea() == 0.0) {
+				continue;
+			}
+			for (size_t v = 0; v < 3; ++v) {
+				tids[v] = vertex_remapping[tri->GetPointId(v)];
+			}
+			fout << "f " << tids[0] << " " << tids[1] << " " << tids[2] << "\n";
 		}
-		for (size_t v = 0; v < 3; ++v) {
-			tids[v] = vertex_remapping[tri->GetPointId(v)];
-		}
-		fout << "f " << tids[0] << " " << tids[1] << " " << tids[2] << "\n";
 	}
 
 	return 0;
