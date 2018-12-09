@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
 	} else if (data_type == "int16") {
 		dtype_size = 2;
 		vtk_data_type = VTK_SHORT;
-	} else if (data_type == "float32") {
+	} else if (data_type == "float32" || data_type == "float") {
 		dtype_size = 4;
 		vtk_data_type = VTK_FLOAT;
 	} else if (data_type == "float64" || data_type == "double") {
