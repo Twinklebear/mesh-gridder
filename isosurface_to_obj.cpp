@@ -81,10 +81,18 @@ int main(int argc, char **argv) {
 
 	if (outputfile != "nooutput") {
 		std::cout << "Saving mesh to " << outputfile << "\n";
-		std::ofstream fout(outputfile.c_str());
+		std::ofstream fout;
+		const bool write_binary = outputfile.substr(outputfile.size() - 4) == "bobj";
+		if (!write_binary) {
+			fout.open(outputfile.c_str());
+		} else {
+			fout.open(outputfile.c_str(), std::ios::binary);
+			uint64_t header[2] = {0};
+			fout.write(reinterpret_cast<char*>(header), sizeof(header));
+		}
 		size_t next_vert_id = 1;
-		std::unordered_map<size_t, size_t> vertex_remapping;
-		std::map<vec3f, size_t> remapped_verts;
+		std::unordered_map<uint64_t, uint64_t> vertex_remapping;
+		std::map<vec3f, uint64_t> remapped_verts;
 
 		for (size_t i = 0; i < isosurface->GetNumberOfCells(); ++i) {
 			vtkTriangle *tri = dynamic_cast<vtkTriangle*>(isosurface->GetCell(i));
@@ -99,15 +107,21 @@ int main(int argc, char **argv) {
 				if (remapped_verts.find(vert) == remapped_verts.end()) {
 					remapped_verts[vert] = next_vert_id;
 
-					fout << "v " << vert.x << " " << vert.y << " " << vert.z << "\n";
+					if (!write_binary) {
+						fout << "v " << vert.x << " " << vert.y << " " << vert.z << "\n";
+					} else {
+						fout.write(reinterpret_cast<const char*>(&vert), sizeof(vert));
+					}
 
 					++next_vert_id;
 				}
 				vertex_remapping[tri->GetPointId(v)] = remapped_verts[vert];
 			}
 		}
+		const uint64_t n_verts_written = next_vert_id - 1;
+		uint64_t n_indices_written = 0;
 		for (size_t i = 0; i < isosurface->GetNumberOfCells(); ++i) {
-			std::array<size_t, 3> tids;
+			std::array<uint64_t, 3> tids;
 			vtkTriangle *tri = dynamic_cast<vtkTriangle*>(isosurface->GetCell(i));
 			if (tri->ComputeArea() == 0.0) {
 				continue;
@@ -115,7 +129,21 @@ int main(int argc, char **argv) {
 			for (size_t v = 0; v < 3; ++v) {
 				tids[v] = vertex_remapping[tri->GetPointId(v)];
 			}
-			fout << "f " << tids[0] << " " << tids[1] << " " << tids[2] << "\n";
+			if (!write_binary) {
+				fout << "f " << tids[0] << " " << tids[1] << " " << tids[2] << "\n";
+			} else {
+				for (uint64_t &x : tids) {
+					x -= 1;
+				}
+				fout.write(reinterpret_cast<char*>(tids.data()), sizeof(uint64_t) * tids.size());
+			}
+			++n_indices_written;
+		}
+		// Seek back and update the header
+		if (write_binary) {
+			fout.seekp(0);
+			fout.write(reinterpret_cast<const char*>(&n_verts_written), sizeof(uint64_t));
+			fout.write(reinterpret_cast<char*>(&n_indices_written), sizeof(uint64_t));
 		}
 	}
 
